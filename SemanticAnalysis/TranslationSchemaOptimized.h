@@ -496,7 +496,7 @@ void solveif_opt(int line)
     }
 }
 
-void AnalysisOptimized(istream &in)
+void AnalysisOptimized(istream &in, const string &baseName)
 {
     reader = new BufferedReader(in);
     char s[100];
@@ -569,7 +569,6 @@ void AnalysisOptimized(istream &in)
     // 输出
     if (flag_err)
     {
-
         map<string, Symbol> sorted(symTable.table.begin(), symTable.table.end());
         for (auto &pair : sorted)
         {
@@ -584,10 +583,17 @@ void AnalysisOptimized(istream &in)
         }
     }
 
-    symTable.dumpSnapshot("SemanticAnalysis/output/symbol_table_snapshot.csv");
-    irGen.dumpIR("SemanticAnalysis/output/ir_code.txt");
+    string csvPath = "SemanticAnalysis/output/" + baseName + "_symbol_table_snapshot.csv";
+    string irPath = "SemanticAnalysis/output/" + baseName + "_ir_code.txt";
+    symTable.dumpSnapshot(csvPath);
+    irGen.dumpIR(irPath);
 
     delete reader;
+}
+
+void AnalysisOptimized(istream &in)
+{
+    AnalysisOptimized(in, "default");
 }
 
 #endif

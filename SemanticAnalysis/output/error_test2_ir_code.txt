@@ -1,0 +1,6 @@
+0: DECL_INT 1, , a
+1: DECL_INT 0, , b
+2: DECL_REAL 4.0, , c
+3: / c, b, c
+4: IF_< a, b, GOTO_TRUE
+5: / c, 2, c
