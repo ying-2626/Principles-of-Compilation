@@ -1,12 +1,11 @@
-语法错误,第5行,缺少"else"
-语法错误,第5行,缺少"}"
-program => 
+语法错误,第7行,缺少";"
+program
 	compoundstmt
 		{
 		stmts
 			stmt
-				ifstmt
-					if
+				whilestmt
+					while
 					(
 					boolexpr
 						arithexpr
@@ -18,7 +17,7 @@ program =>
 							arithexprprime
 								E
 						boolop
-							>
+							==
 						arithexpr
 							multexpr
 								simpleexpr
@@ -28,7 +27,6 @@ program =>
 							arithexprprime
 								E
 					)
-					then
 					stmt
 						compoundstmt
 							{
@@ -49,7 +47,6 @@ program =>
 								stmts
 									E
 							}
-					else
-					stmt
 			stmts
+				E
 		}

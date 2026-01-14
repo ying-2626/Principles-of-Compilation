@@ -160,6 +160,10 @@ void init()
     a[cal("I")][";"] = "@";
     a[cal("I")]["!"] = "@";
     a[cal("I")]["}"] = "@";
+    a[cal("I")]["w"] = "@";
+    a[cal("I")]["y"] = "@";
+    a[cal("I")]["["] = "@";
+    a[cal("I")]["{"] = "@";
 
     // 乘法表达式 J
     a[cal("J")]["("] = "KM";
@@ -189,6 +193,10 @@ void init()
     a[cal("M")]["/"] = "/KM";
     a[cal("M")]["*"] = "*KM";
     a[cal("M")]["}"] = "@";
+    a[cal("M")]["w"] = "@";
+    a[cal("M")]["y"] = "@";
+    a[cal("M")]["["] = "@";
+    a[cal("M")]["{"] = "@";
 
     // 布尔运算符 N
     a[cal("N")]["z"] = "z";
@@ -227,7 +235,8 @@ void init()
     p["w"] = "while";
 }
 
-int line; // 当前行号，用于错误报告
+int line;              // 当前行号，用于错误报告
+int lastTokenLine = 1; // 上一个成功匹配的 Token 所在的行号
 
 // 全局推导序列，用于后续可视化输出
 vector<pair<string, int>> llDerivationSeq;
@@ -454,8 +463,12 @@ int error(string s, int &cur, int l, int d)
 
             // 匹配终结符
             int flag = 0;
+            int reportLine = line; // 用于记录报错行号
+
             for (int k = 0; k < mappedName.length(); k++)
             {
+                int startLine = line; // 记录本次字符匹配跳过空白前的行号
+
                 // 跳过空白字符
                 while (1)
                 {
@@ -478,7 +491,23 @@ int error(string s, int &cur, int l, int d)
                 if (s[i] != mappedName[k])
                 {
                     flag = 1;
+                    // 使用 lastTokenLine 来确定报错行号
+                    // 如果当前行号大于上一个成功匹配的 Token 行号，说明错误可能发生在上一行末尾
+                    if (line > lastTokenLine)
+                    {
+                        reportLine = lastTokenLine;
+                    }
+                    else
+                    {
+                        reportLine = line;
+                    }
                     i--;
+                }
+                else
+                {
+                    // 匹配成功，更新 lastTokenLine
+                    // 注意：这里 line 已经是当前字符所在的行号了
+                    lastTokenLine = line;
                 }
                 i++;
             }
@@ -486,7 +515,7 @@ int error(string s, int &cur, int l, int d)
             // 报告语法错误
             if (flag == 1)
             {
-                printf("语法错误,第%d行,缺少\"", line);
+                printf("语法错误,第%d行,缺少\"", reportLine);
                 cout << mappedName;
                 printf("\"\n");
             }
@@ -510,21 +539,13 @@ void Analysis(istream &in = cin)
 
     int len = prog.length();
     int cur = cal("A"); // 起始符号A
-    line = 0;
+    line = 1;
 
     // 第一遍：检查语法错误
-    for (int i = 0; i < len;)
+    if (len > 0)
     {
-        int next = error(prog, cur, i, 1);
-        // 防止在同一位置反复调用 error 导致死循环
-        if (next <= i)
-        {
-            i++;
-        }
-        else
-        {
-            i = next;
-        }
+        lastTokenLine = 1;
+        error(prog, cur, 0, 1);
     }
 
     // 第二遍：构建并输出语法分析树
@@ -533,9 +554,10 @@ void Analysis(istream &in = cin)
 
     cout << "program" << endl; // 输出起始符号
     cur = cal("A");            // 重置为起始符号
-    for (int i = 0; i < len;)
+    if (len > 0)
     {
-        i = solve(prog, cur, i, 1);
+        lastTokenLine = 1;
+        solve(prog, cur, 0, 1);
     }
 
     // Generate DOT file

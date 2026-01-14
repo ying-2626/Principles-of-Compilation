@@ -1,6 +1,6 @@
 语法错误,第2行,缺少";"
 语法错误,第3行,缺少")"
-program => 
+program
 	compoundstmt
 		{
 		stmts
@@ -13,7 +13,9 @@ program =>
 							simpleexpr
 								NUM
 							multexprprime
+								E
 						arithexprprime
+							E
 					;
 			stmts
 				stmt
@@ -36,7 +38,9 @@ program =>
 									simpleexpr
 										NUM
 									multexprprime
+										E
 								arithexprprime
+									E
 						)
 						stmt
 							compoundstmt

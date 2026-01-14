@@ -1,5 +1,11 @@
 {
-    if ( ID > NUM ) then
-    {
-        ID = NUM ;
+
+while ( ID == NUM ) 
+
+{ 
+
+ID = NUM 
+
+}
+
 }
