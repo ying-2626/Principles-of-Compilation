@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "d:/vscodeenv/mingw/lib/gcc/mingw32/6.3.0/include/c++",
+                "d:/vscodeenv/mingw/lib/gcc/mingw32/6.3.0/include/c++/mingw32",
+                "d:/vscodeenv/mingw/lib/gcc/mingw32/6.3.0/include/c++/backward",
+                "d:/vscodeenv/mingw/lib/gcc/mingw32/6.3.0/include",
+                "d:/vscodeenv/mingw/include",
+                "d:/vscodeenv/mingw/lib/gcc/mingw32/6.3.0/include-fixed"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.17763.0",
+            "compilerPath": "D:/vscodeENV/MinGW/bin/g++.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "gcc-x86"
+        }
+    ],
+    "version": 4
+}
