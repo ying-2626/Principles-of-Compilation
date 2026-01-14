@@ -15,12 +15,13 @@
 /*Author : byj*/
 using namespace std;
 
+// 文法产生式（With Form）：left -> right，back 为在原文法中的编号
 class WF
 {
 public:
-    string left, right;
-    int back;
-    int id;
+    string left, right; // 产生式左部与右部
+    int back;           // 指向在原始文法数组中的下标
+    int id;             // 在 items 向量中的编号
     WF(const char *s1, const char *s2, int x, int y)
     {
         left = s1;
@@ -51,10 +52,11 @@ public:
     }
 };
 
+// 项目集闭包
 class Closure
 {
 public:
-    vector<WF> element;
+    vector<WF> element; // 项目集合
     void print(string str)
     {
         printf("%-15s%-15s\n", "", str.c_str());
@@ -74,9 +76,10 @@ public:
     }
 };
 
+// LR 分析表中单个单元格的动作
 struct Content
 {
-    int type; // 0:shift, 1:reduce, 2:acc, -1:error
+    int type; // 0: 移进 shift，1: 规约 reduce，2: 接受 acc，-1: 出错
     int num;
     string out;
     Content() { type = -1; }
@@ -84,34 +87,39 @@ struct Content
         : type(a), num(b) {}
 };
 
-vector<WF> wf;
-map<string, vector<int>> dic;
-map<string, vector<int>> VN_set;
-map<string, bool> vis;
-string start = "S";
-vector<Closure> collection;
-vector<WF> items;
-char CH = '^';    // Use '^' as dot, since '.' is a terminal
-int go[MAX][256]; // ASCII size
-int to[MAX];
-vector<char> V;
-bool used[256];
-Content action[MAX][256];
-int Goto[MAX][256];
-map<string, set<char>> first;
-map<string, set<char>> follow;
+// 全局数据结构
+vector<WF> wf;                   // 原始文法产生式
+map<string, vector<int>> dic;    // 非终结符 -> 含该左部的项目在 items 中的位置
+map<string, vector<int>> VN_set; // 非终结符 -> 含该左部的产生式在 wf 中的位置
+map<string, bool> vis;           // DFS 计算 FIRST 时的访问标记
+string start = "S";              // 增广文法的开始符号
+vector<Closure> collection;      // LR(0) 项目集族
+vector<WF> items;                // 带点项目集合
+char CH = '^';                   // 使用 '^' 作为项目中的点，避免与终结符 '.' 冲突
+int go[MAX][256];                // 项目集间的 GOTO 转移，按 ASCII 编码索引
+int to[MAX];                     // 用于记录相邻点位项目之间的“前驱”关系
+vector<char> V;                  // 文法符号集合（终结符 + 非终结符）
+bool used[256];                  // 记录某个字符是否已经加入 V
+Content action[MAX][256];        // ACTION 表的中间表示
+int Goto[MAX][256];              // GOTO 表的中间表示
+map<string, set<char>> first;    // FIRST 集
+map<string, set<char>> follow;   // FOLLOW 集
 
+// 构造所有带点项目 items，并建立 VN_set / dic / to 等辅助结构
 void make_item()
 {
     memset(to, -1, sizeof(to));
+    // 记录每个非终结符作为左部出现在哪些产生式中
     for (int i = 0; i < wf.size(); i++)
         VN_set[wf[i].left].push_back(i);
+
+    // 对每条产生式 A -> α，在右部每一个位置插入点，形成带点项目
     for (int i = 0; i < wf.size(); i++)
         for (int j = 0; j <= wf[i].right.length(); j++)
         {
             string temp = wf[i].right;
             if (temp == "@")
-            { // Handle epsilon
+            { // 处理空产生式 A -> @
                 temp = "";
                 temp.insert(0, 1, CH);
                 dic[wf[i].left].push_back(items.size());
@@ -119,14 +127,16 @@ void make_item()
                 continue;
             }
 
+            // 在第 j 个位置前插入点
             temp.insert(temp.begin() + j, CH);
             dic[wf[i].left].push_back(items.size());
             if (j)
-                to[items.size() - 1] = items.size();
+                to[items.size() - 1] = items.size(); // 记录同一产生式中相邻点位项目
             items.push_back(WF(wf[i].left, temp, i, items.size()));
         }
 }
 
+// 深度优先搜索计算非终结符 x 的 FIRST 集
 void dfs(const string &x)
 {
     if (vis[x])
@@ -138,7 +148,7 @@ void dfs(const string &x)
         string &left = wf[id[i]].left;
         string &right = wf[id[i]].right;
         if (right == "@")
-        { // Epsilon
+        { // 右部可为空，将 @ 加入 FIRST 集
             first[left].insert('@');
             continue;
         }
@@ -159,7 +169,7 @@ void dfs(const string &x)
                 }
                 if (flag)
                     break;
-                // If we reach here, it means this non-terminal can derive epsilon, continue to next symbol
+                // 能到达这里，说明该非终结符可以推出空串，继续考察右侧下一个符号
                 if (j == right.length() - 1)
                 {
                     first[left].insert('@');
@@ -173,6 +183,7 @@ void dfs(const string &x)
     }
 }
 
+// 计算文法中所有非终结符的 FIRST 集
 void make_first()
 {
     vis.clear();
@@ -184,6 +195,7 @@ void make_first()
             dfs(it2->first);
 }
 
+// 将 Follow(str1) 合并进 Follow(str2)
 void append(const string &str1, const string &str2)
 {
     set<char> &from = follow[str1];
@@ -193,6 +205,7 @@ void append(const string &str1, const string &str2)
         to.insert(*it);
 }
 
+// 检查给定产生式编号集合中，是否存在右部为 str 的产生式
 bool _check(const vector<int> &id, const string str)
 {
     for (int i = 0; i < id.size(); i++)
@@ -204,9 +217,10 @@ bool _check(const vector<int> &id, const string str)
     return false;
 }
 
+// 迭代计算所有非终结符的 FOLLOW 集
 void make_follow()
 {
-    follow[start].insert('#'); // Start symbol follows #
+    follow[start].insert('#'); // 文法开始符号的 FOLLOW 集中加入 #
     while (true)
     {
         bool goon = false;
@@ -225,11 +239,10 @@ void make_follow()
                 for (int j = right.length() - 1; j >= 0; j--)
                     if (isupper(right[j]))
                     {
-                        // Current NonTerminal: right[j]
-                        // Check what follows it
+                        // 当前非终结符为 right[j]，考察其右侧符号对 FOLLOW 的影响
                         bool all_derive_epsilon = true;
 
-                        // Add First(beta) to Follow(B)
+                        // 将 beta 的 FIRST 集（去掉 epsilon）加入 Follow(B)
                         for (int k = j + 1; k < right.length(); k++)
                         {
                             if (isupper(right[k]))
@@ -266,7 +279,7 @@ void make_follow()
                             }
                         }
 
-                        // If beta derives epsilon, add Follow(A) to Follow(B)
+                        // 如果 beta 能推导出空，则将 Follow(A) 加入 Follow(B)
                         if (all_derive_epsilon)
                         {
                             int old_size = follow[right.substr(j, 1)].size();
@@ -282,13 +295,14 @@ void make_follow()
     }
 }
 
+// 基于 items 构造 LR(0) 项目集族 collection
 void make_set()
 {
     bool has[MAX];
     for (int i = 0; i < items.size(); i++)
         if (items[i].left[0] == 'S' && items[i].right[0] == CH)
         {
-            Closure temp;
+            Closure temp; // 初始闭包，只包含 S' -> ·A 这一项目
             string &str = items[i].right;
             vector<WF> &element = temp.element;
             element.push_back(items[i]);
@@ -307,7 +321,7 @@ void make_set()
                 {
                     string u = q.front();
                     q.pop();
-                    vector<int> &id = dic[u];
+                    vector<int> &id = dic[u]; // 所有以 u 为左部的项目
                     for (int j = 0; j < id.size(); j++)
                     {
                         int tx = id[j];
@@ -330,14 +344,14 @@ void make_set()
         map<int, Closure> temp;
         for (int j = 0; j < collection[i].element.size(); j++)
         {
-            string str = collection[i].element[j].right;
+            string str = collection[i].element[j].right; // 当前项目右部
             int x = 0;
             for (; x < str.length(); x++)
                 if (str[x] == CH)
                     break;
             if (x == str.length() - 1)
                 continue;
-            int y = str[x + 1];
+            int y = str[x + 1]; // 点后面的符号，作为 GOTO 的输入
             int ii;
 
             str.erase(str.begin() + x);
@@ -397,6 +411,7 @@ void make_set()
 void make_V()
 {
     memset(used, 0, sizeof(used));
+    // 扫描所有产生式，收集出现过的终结符和非终结符，构成符号集合 V
     for (int i = 0; i < wf.size(); i++)
     {
         string &str = wf[i].left;
@@ -424,6 +439,7 @@ void make_V()
 
 void make_cmp(vector<WF> &cmp1, int i, char ch)
 {
+    // 在项目集 I_i 中，找到所有对符号 ch 进行 GOTO 转移后的项目集合 cmp1
     for (int j = 0; j < collection[i].element.size(); j++)
     {
         string str = collection[i].element[j].right;
@@ -455,6 +471,7 @@ void make_go()
             make_cmp(cmp1, i, ch);
             if (cmp1.size() == 0)
                 continue;
+            // 查找已有的项目集 J，与 cmp1 完全一致则记为 go(I_i, ch) = J
             for (int j = 0; j < m; j++)
             {
                 vector<WF> cmp2;
@@ -491,7 +508,7 @@ void make_table()
 {
     memset(Goto, -1, sizeof(Goto));
 
-    // write s to the table
+    // 将移进状态 s 写入分析表
     for (int i = 0; i < collection.size(); i++)
         for (int j = 0; j < V.size(); j++)
         {
@@ -504,7 +521,7 @@ void make_table()
             else
                 Goto[i][ch] = x;
         }
-    // write r and acc to the table
+    // 将规约 r 和接受 acc 写入分析表
     for (int i = 0; i < collection.size(); i++)
         for (int j = 0; j < collection[i].element.size(); j++)
         {
@@ -533,7 +550,7 @@ void export_table()
     out << "#include <vector>" << endl;
     out << "#include <string>" << endl;
     out << "using namespace std;" << endl;
-    out << "struct Action { int type; int val; };" << endl; // type: 0=shift, 1=reduce, 2=acc, -1=err
+    out << "struct Action { int type; int val; };" << endl; // type: 0=shift, 1=reduce, 2=acc, -1=err（含义同生成器中）
     out << "struct Production { string left; string right; };" << endl;
 
     out << "const int STATE_COUNT = " << collection.size() << ";" << endl;
@@ -544,7 +561,7 @@ void export_table()
 
     out << "void initLRTable() {" << endl;
 
-    // Init arrays
+    // 初始化数组
     out << "    for(int i=0; i<STATE_COUNT; i++) {" << endl;
     out << "        for(int j=0; j<TERM_COUNT; j++) {" << endl;
     out << "            ACTION[i][j] = {-1, -1};" << endl;
@@ -552,7 +569,7 @@ void export_table()
     out << "        }" << endl;
     out << "    }" << endl;
 
-    // Fill Action
+    // 填充 ACTION 表
     for (int i = 0; i < collection.size(); i++)
     {
         for (int j = 0; j < 256; j++)
@@ -564,7 +581,7 @@ void export_table()
         }
     }
 
-    // Fill Goto
+    // 填充 GOTO 表
     for (int i = 0; i < collection.size(); i++)
     {
         for (int j = 0; j < 256; j++)
@@ -577,7 +594,7 @@ void export_table()
     }
     out << "}" << endl;
 
-    // Export productions
+    // 导出产生式数组
     out << "vector<Production> PRODUCTIONS = {" << endl;
     for (int i = 0; i < wf.size(); i++)
     {

@@ -10,22 +10,22 @@
 
 using namespace std;
 
-// Shared definition for TokenInfo if not already available
-// In the original code, TokenInfo is typedef pair<string, int> TokenInfo;
-// We assume this structure is passed to us.
+// 若外部未定义 TokenInfo，这里仅共享其含义：
+// 在原始代码中，TokenInfo 等价于 pair<string, int>
+// 本类假定调用方传入的序列遵循该约定
 
 class Visualizer
 {
 public:
-    // Generate DOT file from derivation sequence (Token, Depth)
-    // filename: output path (e.g., "output.dot")
-    // seq: vector of <TokenName, Depth>
+    // 根据推导序列（记号名，深度）生成 DOT 文件
+    // filename: 输出文件路径（如 "output.dot"）
+    // seq: 保存 <记号名称, 深度> 的向量
     static void generateDOT(const string &filename, const vector<pair<string, int>> &seq)
     {
         ofstream out(filename);
         if (!out)
         {
-            cerr << "Error: Could not create DOT file: " << filename << endl;
+            cerr << "错误: 无法创建 DOT 文件: " << filename << endl;
             return;
         }
 
@@ -33,8 +33,8 @@ public:
         out << "    node [shape=box, fontname=\"Arial\"];" << endl;
         out << "    edge [dir=none];" << endl;
 
-        // We need to reconstruct the tree from the pre-order traversal with depth info.
-        // Stack stores pairs of <NodeID, Depth>
+        // 需要根据带有深度信息的先序遍历序列重建语法树
+        // 栈中存储 <节点编号, 深度> 对
         stack<pair<int, int>> parentStack;
 
         int nodeId = 0;
@@ -42,15 +42,15 @@ public:
         for (const auto &token : seq)
         {
             string label = token.first;
-            int depth = abs(token.second); // Assuming depth is stored in absolute value based on existing code
+            int depth = abs(token.second); // 假定深度以非负整数形式记录
 
-            // Skip empty/epsilon if desired, or visualize them
+            // 需要时可以跳过空/ε 结点，也可以选择将其可视化
             if (label.empty())
                 continue;
 
             int currentId = ++nodeId;
 
-            // Escape quote characters in label for DOT format
+            // 将字符串中的引号转义，满足 DOT 语法要求
             string displayLabel = label;
             size_t pos = 0;
             while ((pos = displayLabel.find("\"", pos)) != string::npos)
@@ -61,7 +61,7 @@ public:
 
             out << "    node" << currentId << " [label=\"" << displayLabel << "\"];" << endl;
 
-            // Find parent
+            // 查找当前结点在栈中的父结点
             while (!parentStack.empty() && parentStack.top().second >= depth)
             {
                 parentStack.pop();
@@ -73,14 +73,14 @@ public:
                 out << "    node" << parentId << " -> node" << currentId << ";" << endl;
             }
 
-            // Push current node as potential parent for next nodes
+            // 将当前结点压栈，作为后续结点的候选父结点
             parentStack.push({currentId, depth});
         }
 
         out << "}" << endl;
         out.close();
-        // cout << "Generated DOT file: " << filename << endl;
+        // 如需调试，可在此输出生成完成信息
     }
 };
 
-#endif // VISUALIZER_H
+#endif

@@ -76,7 +76,7 @@ map<string, int> operators = {
 
 int tokenCount = 0;
 
-// 输出token的函数
+// 输出 token 的函数
 void printToken(const string &name, int code)
 {
     tokenCount++;
@@ -101,50 +101,265 @@ bool isWhitespace(char c)
     return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
-// 获取运算符，处理多字符运算符
-string getOperator(string prog, int &pos)
+/* 基于 DFA 表驱动的词法分析器 */
+const int MAX_STATES = 500;
+const int ASCII_SIZE = 256;
+
+struct DFA
 {
-    int n = prog.length();
-    if (pos >= n)
-        return "";
+    int trans[MAX_STATES][ASCII_SIZE];
+    int accept[MAX_STATES]; // 0 表示非接收态，>0 表示某类记号类别
+    int state_count;
 
-    char c1 = prog[pos];
-    char c2 = (pos + 1 < n) ? prog[pos + 1] : '\0';
-    char c3 = (pos + 2 < n) ? prog[pos + 2] : '\0';
-
-    // 处理三字符运算符 <<= 和 >>=
-    if (c1 == '<' && c2 == '<' && c3 == '=')
+    void init()
     {
-        pos += 3;
-        return "<<=";
-    }
-    if (c1 == '>' && c2 == '>' && c3 == '=')
-    {
-        pos += 3;
-        return ">>=";
+        memset(trans, -1, sizeof(trans));
+        memset(accept, 0, sizeof(accept));
+        state_count = 1; // 0 号状态作为起始状态
     }
 
-    // 处理双字符运算符
-    string twoChar = string(1, c1) + c2;
-    if (operators.find(twoChar) != operators.end())
+    int add_state()
     {
-        pos += 2;
-        return twoChar;
+        return state_count++;
     }
 
-    // 单字符运算符
-    string oneChar = string(1, c1);
-    if (operators.find(oneChar) != operators.end())
+    void add_transition(int from, char c, int to)
     {
-        pos += 1;
-        return oneChar;
+        trans[from][(unsigned char)c] = to;
+    }
+} dfa;
+
+// DFA 中的记号类别标签
+const int CAT_ID = 1;
+const int CAT_NUM = 2;
+const int CAT_STR = 3;
+const int CAT_CHAR = 4;
+const int CAT_OP = 5;
+const int CAT_COMMENT_LINE = 6;
+const int CAT_COMMENT_BLOCK = 7;
+const int CAT_WHITESPACE = 8;
+
+void init_dfa()
+{
+    dfa.init();
+
+    // State 0: Start
+    int s_start = 0;
+
+    // 1. 空白字符
+    int s_ws = dfa.add_state();
+    dfa.accept[s_ws] = CAT_WHITESPACE;
+    string ws = " \t\n\r";
+    for (char c : ws)
+    {
+        dfa.add_transition(s_start, c, s_ws);
+        dfa.add_transition(s_ws, c, s_ws);
     }
 
-    return "";
+    // 2. 标识符 / 关键字（以字母或下划线开头）
+    int s_id = dfa.add_state();
+    dfa.accept[s_id] = CAT_ID;
+    for (int c = 0; c < 256; c++)
+    {
+        if (isLetter(c))
+            dfa.add_transition(s_start, c, s_id);
+        if (isLetter(c) || isDigit(c))
+            dfa.add_transition(s_id, c, s_id);
+    }
+
+    // 3. 数字（以数字开头）
+    int s_num = dfa.add_state();
+    dfa.accept[s_num] = CAT_NUM;
+    for (int c = 0; c < 256; c++)
+    {
+        if (isDigit(c))
+        {
+            dfa.add_transition(s_start, c, s_num);
+            dfa.add_transition(s_num, c, s_num);
+        }
+    }
+    // 浮点数与科学计数法使用更多状态（这里采用适度精简但足够鲁棒的方案）
+    // 为浮点数添加小数点状态
+    int s_dot = dfa.add_state();
+    dfa.add_transition(s_num, '.', s_dot);
+    int s_float = dfa.add_state();
+    dfa.accept[s_float] = CAT_NUM;
+    for (int c = 0; c < 256; c++)
+        if (isDigit(c))
+            dfa.add_transition(s_dot, c, s_float);
+    for (int c = 0; c < 256; c++)
+        if (isDigit(c))
+            dfa.add_transition(s_float, c, s_float);
+
+    // 科学计数法（e/E）
+    int s_sci = dfa.add_state();
+    int s_sci_sign = dfa.add_state();
+    int s_sci_val = dfa.add_state();
+    dfa.accept[s_sci_val] = CAT_NUM;
+
+    dfa.add_transition(s_num, 'e', s_sci);
+    dfa.add_transition(s_num, 'E', s_sci);
+    dfa.add_transition(s_float, 'e', s_sci);
+    dfa.add_transition(s_float, 'E', s_sci);
+
+    dfa.add_transition(s_sci, '+', s_sci_sign);
+    dfa.add_transition(s_sci, '-', s_sci_sign);
+    for (int c = 0; c < 256; c++)
+        if (isDigit(c))
+        {
+            dfa.add_transition(s_sci, c, s_sci_val);
+            dfa.add_transition(s_sci_sign, c, s_sci_val);
+            dfa.add_transition(s_sci_val, c, s_sci_val);
+        }
+    // 数值后缀（f、l 等）
+    int s_suffix = dfa.add_state();
+    dfa.accept[s_suffix] = CAT_NUM;
+    string suffix = "flFL";
+    for (char c : suffix)
+    {
+        dfa.add_transition(s_num, c, s_suffix);
+        dfa.add_transition(s_float, c, s_suffix);
+        dfa.add_transition(s_sci_val, c, s_suffix);
+    }
+
+    // 4. 字符串（以双引号开头）
+    int s_str_start = dfa.add_state();
+    int s_str_content = dfa.add_state();
+    int s_str_esc = dfa.add_state();
+    int s_str_end = dfa.add_state();
+    dfa.accept[s_str_end] = CAT_STR; // 仅在遇到闭合引号时视为接收态
+
+    dfa.add_transition(s_start, '"', s_str_start); // 起始引号
+    // 从起始引号进入内容或空串直接闭合
+    dfa.add_transition(s_str_start, '"', s_str_end); // 空串形式
+    for (int c = 0; c < 256; c++)
+    {
+        if (c != '"' && c != '\\')
+            dfa.add_transition(s_str_start, c, s_str_content);
+    }
+
+    // 字符串内容部分
+    for (int c = 0; c < 256; c++)
+    {
+        if (c == '"')
+            dfa.add_transition(s_str_content, c, s_str_end);
+        else if (c == '\\')
+            dfa.add_transition(s_str_content, c, s_str_esc);
+        else
+            dfa.add_transition(s_str_content, c, s_str_content);
+    }
+
+    // 转义字符后回到内容状态
+    for (int c = 0; c < 256; c++)
+        dfa.add_transition(s_str_esc, c, s_str_content);
+
+    // 5. 字符常量（以单引号开头）
+    int s_char_start = dfa.add_state();
+    int s_char_content = dfa.add_state();
+    int s_char_esc = dfa.add_state();
+    int s_char_end = dfa.add_state();
+    dfa.accept[s_char_end] = CAT_CHAR;
+
+    dfa.add_transition(s_start, '\'', s_char_start);
+    for (int c = 0; c < 256; c++)
+    {
+        if (c != '\'' && c != '\\')
+            dfa.add_transition(s_char_start, c, s_char_content);
+    }
+    dfa.add_transition(s_char_start, '\\', s_char_esc); // 处理转义字符
+
+    for (int c = 0; c < 256; c++)
+    {
+        if (c == '\'')
+            dfa.add_transition(s_char_content, c, s_char_end);
+        else
+            dfa.add_transition(s_char_content, c, s_char_content); // 按理字符长度应为 1，此处放宽以方便错误恢复
+    }
+    for (int c = 0; c < 256; c++)
+        dfa.add_transition(s_char_esc, c, s_char_content);
+
+    // 6. 注释（以 / 开头）
+    int s_slash = dfa.add_state();
+    dfa.accept[s_slash] = CAT_OP; // 如果后面不是注释起始，则单独视为运算符 /
+    dfa.add_transition(s_start, '/', s_slash);
+
+    // 行注释 //
+    int s_line_com = dfa.add_state();
+    dfa.accept[s_line_com] = CAT_COMMENT_LINE; // 在遇到换行之前都视为处于注释内部
+    dfa.add_transition(s_slash, '/', s_line_com);
+    for (int c = 0; c < 256; c++)
+    {
+        if (c != '\n')
+            dfa.add_transition(s_line_com, c, s_line_com);
+    }
+
+    // 块注释 /*
+    int s_block_com = dfa.add_state();
+    int s_block_com_star = dfa.add_state();
+    int s_block_com_end = dfa.add_state();
+    dfa.accept[s_block_com_end] = CAT_COMMENT_BLOCK;
+
+    dfa.add_transition(s_slash, '*', s_block_com);
+    for (int c = 0; c < 256; c++)
+    {
+        if (c == '*')
+            dfa.add_transition(s_block_com, c, s_block_com_star);
+        else
+            dfa.add_transition(s_block_com, c, s_block_com);
+    }
+
+    for (int c = 0; c < 256; c++)
+    {
+        if (c == '/')
+            dfa.add_transition(s_block_com_star, c, s_block_com_end);
+        else if (c == '*')
+            dfa.add_transition(s_block_com_star, c, s_block_com_star); // 保持在连续 * 的状态
+        else
+            dfa.add_transition(s_block_com_star, c, s_block_com); // 回到注释内容状态
+    }
+
+    // 7. 运算符
+    // 为所有运算符在 DFA 中构建类似 Trie 的状态路径
+    // 注意：以 / 开头的情形已经由 s_slash 处理，这里只补充其余情况；/=
+    // 通过单独逻辑挂接到 s_slash 之后
+
+    for (map<string, int>::const_iterator it = operators.begin(); it != operators.end(); ++it)
+    {
+        const string &op = it->first;
+        int code = it->second;
+
+        if (op[0] == '/')
+        {
+            // 对 /= 做特殊处理，将其连接到 s_slash 之后
+            if (op == "/=")
+            {
+                int s_diveq = dfa.add_state();
+                dfa.accept[s_diveq] = CAT_OP;
+                dfa.add_transition(s_slash, '=', s_diveq);
+            }
+            continue; // 单独的 / 已经在前面处理
+        }
+
+        int curr = s_start;
+        for (size_t idx = 0; idx < op.size(); ++idx)
+        {
+            char c = op[idx];
+            int next = dfa.trans[curr][(unsigned char)c];
+            if (next == -1)
+            {
+                next = dfa.add_state();
+                dfa.add_transition(curr, c, next);
+            }
+            curr = next;
+        }
+        dfa.accept[curr] = CAT_OP;
+    }
 }
 
 void Analysis(istream &in = cin)
 {
+    init_dfa();
+
     string prog;
     read_prog(prog, in);
 
@@ -153,203 +368,90 @@ void Analysis(istream &in = cin)
 
     while (i < n)
     {
-        // 跳过空白字符
-        if (isWhitespace(prog[i]))
-        {
-            i++;
-            continue;
-        }
+        int curr = 0; // Start state
+        int last_accept_state = -1;
+        int last_accept_pos = -1;
+        int p = i;
 
-        // 处理//注释
-        if (i + 1 < n && prog[i] == '/' && prog[i + 1] == '/')
+        // Run DFA
+        while (p < n)
         {
-            int start = i;
-            i += 2; // 跳过"//"
-            // 获取完整的注释内容
-            while (i < n && prog[i] != '\n')
-            {
-                i++;
-            }
-            string comment = prog.substr(start, i - start);
-            // 根据题目要求，//注释映射到编号79
-            printToken(comment, 79);
-            if (i < n && prog[i] == '\n')
-            {
-                i++;
-            }
-            continue;
-        }
+            char c = prog[p];
+            int next = dfa.trans[curr][(unsigned char)c];
 
-        // 处理/* */注释
-        if (i + 1 < n && prog[i] == '/' && prog[i + 1] == '*')
-        {
-            int start = i;
-            i += 2; // 跳过"/*"
-            // 找到注释结束
-            while (i + 1 < n && !(prog[i] == '*' && prog[i + 1] == '/'))
+            if (next != -1)
             {
-                i++;
-            }
-            if (i + 1 < n)
-            {
-                i += 2; // 跳过"*/"
-            }
-            string comment = prog.substr(start, i - start);
-            // /*注释映射到编号79
-            printToken(comment, 79);
-            continue;
-        }
-
-        // 处理标识符或关键字
-        if (isLetter(prog[i]))
-        {
-            int start = i;
-            while (i < n && (isLetter(prog[i]) || isDigit(prog[i])))
-            {
-                i++;
-            }
-            string token = prog.substr(start, i - start);
-
-            if (keywords.find(token) != keywords.end())
-            {
-                printToken(token, keywords[token]);
+                curr = next;
+                if (dfa.accept[curr] > 0)
+                {
+                    last_accept_state = curr;
+                    last_accept_pos = p;
+                }
+                p++;
             }
             else
             {
-                printToken(token, 81);
+                break;
             }
-            continue;
         }
 
-        // 处理数字
-        if (isDigit(prog[i]))
+        if (last_accept_state != -1)
         {
-            int start = i;
-            while (i < n && isDigit(prog[i]))
-            {
-                i++;
-            }
-            // 处理浮点数
-            if (i < n && prog[i] == '.')
-            {
-                i++;
-                while (i < n && isDigit(prog[i]))
-                {
-                    i++;
-                }
-            }
-            // 处理科学计数法
-            if (i < n && (prog[i] == 'e' || prog[i] == 'E'))
-            {
-                i++;
-                if (i < n && (prog[i] == '+' || prog[i] == '-'))
-                {
-                    i++;
-                }
-                while (i < n && isDigit(prog[i]))
-                {
-                    i++;
-                }
-            }
-            // 处理后缀
-            if (i < n && (prog[i] == 'f' || prog[i] == 'F' ||
-                          prog[i] == 'l' || prog[i] == 'L'))
-            {
-                i++;
-            }
+            // Token found
+            string token = prog.substr(i, last_accept_pos - i + 1);
+            int cat = dfa.accept[last_accept_state];
 
-            string token = prog.substr(start, i - start);
-            printToken(token, 80);
-            continue;
-        }
-
-        // 处理字符串常量
-        if (prog[i] == '"')
-        {
-            // 输出开引号
-            printToken("\"", 78);
-            i++;
-
-            int start = i;
-            while (i < n && prog[i] != '"')
+            if (cat == CAT_WHITESPACE)
             {
-                if (prog[i] == '\\' && i + 1 < n)
+                // Ignore
+            }
+            else if (cat == CAT_COMMENT_LINE || cat == CAT_COMMENT_BLOCK)
+            {
+                printToken(token, 79);
+            }
+            else if (cat == CAT_ID)
+            {
+                if (keywords.find(token) != keywords.end())
                 {
-                    i += 2; // 跳过转义字符
+                    printToken(token, keywords[token]);
                 }
                 else
                 {
-                    i++;
+                    printToken(token, 81);
                 }
             }
-
-            // 输出字符串内容
-            if (start < i)
+            else if (cat == CAT_NUM)
             {
-                string strContent = prog.substr(start, i - start);
-                if (!strContent.empty())
-                {
-                    printToken(strContent, 81);
-                }
+                printToken(token, 80);
             }
-
-            // 输出闭引号
-            if (i < n && prog[i] == '"')
+            else if (cat == CAT_STR)
             {
-                i++;
+                // Original logic output: " then content then "
+                printToken("\"", 78);
+                string content = token.substr(1, token.length() - 2);
+                if (!content.empty())
+                    printToken(content, 81);
                 printToken("\"", 78);
             }
-            continue;
-        }
-
-        // 处理字符常量
-        if (prog[i] == '\'')
-        {
-            // 开单引号
-            printToken("'", 77);
-            i++;
-
-            int start = i;
-            if (i < n)
+            else if (cat == CAT_CHAR)
             {
-                if (prog[i] == '\\' && i + 1 < n)
-                {
-                    i += 2; // 处理转义字符
-                }
-                else
-                {
-                    i++;
-                }
-            }
-
-            // 字符内容
-            if (start < i)
-            {
-                string charContent = prog.substr(start, i - start);
-                if (!charContent.empty())
-                {
-                    printToken(charContent, 81);
-                }
-            }
-
-            // 闭单引号
-            if (i < n && prog[i] == '\'')
-            {
-                i++;
+                printToken("'", 77);
+                string content = token.substr(1, token.length() - 2);
+                if (!content.empty())
+                    printToken(content, 81);
                 printToken("'", 77);
             }
-            continue;
-        }
+            else if (cat == CAT_OP)
+            {
+                printToken(token, operators[token]);
+            }
 
-        // 处理运算符和界符
-        string op = getOperator(prog, i);
-        if (!op.empty())
+            i = last_accept_pos + 1;
+        }
+        else
         {
-            printToken(op, operators[op]);
-            continue;
+            // No token matched, skip one char (or error)
+            i++;
         }
-
-        // 如果都不匹配，可能是未知字符，跳过
-        i++;
     }
 }

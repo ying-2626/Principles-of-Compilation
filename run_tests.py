@@ -3,7 +3,7 @@ import subprocess
 import sys
 import shutil
 
-# Configuration
+# 测试配置
 PROJECTS = {
     "lexical": {
         "src": "LexicalAnalysis/main.cpp",
@@ -34,30 +34,30 @@ PROJECTS = {
 }
 
 def compile_project(name, config):
-    print(f"Compiling {name}...")
+    print(f"正在编译 {name}...")
     output_dir = os.path.dirname(config["exe"])
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    # Handle Windows paths and potential spaces/encoding
+    # 处理 Windows 路径以及可能存在的空格/编码问题
     cmd = ["g++", config["src"], "-I", config["include"], "-o", config["exe"]]
     
     try:
-        # Try GBK for Windows compilation output
+        # 优先使用 GBK 解析 Windows 编译输出
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='gbk')
     except UnicodeDecodeError:
-        # Fallback to UTF-8
+        # 如果失败则退回到 UTF-8
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
     if result.returncode != 0:
-        print(f"Error compiling {name}:")
+        print(f"编译 {name} 出错:")
         print(result.stderr)
         return False
-    print(f"Successfully compiled {name}")
+    print(f"编译 {name} 成功")
     return True
 
 def convert_dot_to_png(dot_path, png_path):
-    # Check if dot command exists
+    # 检查系统中是否存在 dot 命令（Graphviz）
     if shutil.which("dot") is None:
         return False
     
@@ -69,12 +69,12 @@ def convert_dot_to_png(dot_path, png_path):
         return False
 
 def run_tests(name, config):
-    print(f"Running tests for {name}...")
+    print(f"正在为 {name} 运行测试用例...")
     exe_path = os.path.abspath(config["exe"])
     test_dir = os.path.abspath(config["test_dir"])
     
     if not os.path.exists(test_dir):
-        print(f"Test directory {test_dir} does not exist")
+        print(f"测试目录 {test_dir} 不存在")
         return
 
     for filename in os.listdir(test_dir):
@@ -87,50 +87,50 @@ def run_tests(name, config):
         if not os.path.isfile(filepath): continue
         if filename.endswith(".out") or filename.endswith(".dot") or filename.endswith(".png"): continue
 
-        print(f"  Testing {filename}...")
+        print(f"  正在测试 {filename}...")
         try:
-            # Clean up previous DOT file if exists
+            # 如存在旧的 DOT 文件，先删除
             if "dot_file" in config and os.path.exists(config["dot_file"]):
                 os.remove(config["dot_file"])
 
-            # Run the executable with the input file as argument
+            # 运行可执行文件，将输入文件作为参数传入
             result = subprocess.run([exe_path, filepath], capture_output=True, text=True, timeout=5, encoding='utf-8', errors='ignore')
             
-            print(f"    Return Code: {result.returncode}")
+            print(f"    返回码: {result.returncode}")
             
-            # Save output
+            # 保存输出结果到 .out 文件
             output_file = filepath + ".out"
             with open(output_file, "w", encoding='utf-8') as f:
                 f.write(result.stdout)
                 if result.stderr:
                     f.write("\nSTDERR:\n")
                     f.write(result.stderr)
-            print(f"    Output saved to {output_file}")
+            print(f"    输出结果已保存到 {output_file}")
             
-            # Handle DOT file
+            # 处理可能生成的 DOT 文件
             if "dot_file" in config and os.path.exists(config["dot_file"]):
-                # Move DOT file to test directory with specific name
+                # 将 DOT 文件移动到对应测试目录，并重命名
                 target_dot = filepath + ".dot"
                 if os.path.exists(target_dot):
                     os.remove(target_dot)
                 os.rename(config["dot_file"], target_dot)
-                print(f"    DOT file generated: {target_dot}")
+                print(f"    已生成 DOT 文件: {target_dot}")
                 
-                # Try to convert to PNG
+                # 尝试将 DOT 转换为 PNG 图片
                 target_png = filepath + ".png"
                 if convert_dot_to_png(target_dot, target_png):
-                    print(f"    PNG image generated: {target_png}")
+                    print(f"    已生成 PNG 图片: {target_png}")
                 else:
-                    print("    (Graphviz 'dot' command not found, skipping PNG generation)")
+                    print("    （未找到 Graphviz 的 dot 命令，跳过 PNG 生成）")
 
         except subprocess.TimeoutExpired as e:
-            print(f"    Error running test: Command timed out after {e.timeout} seconds")
+            print(f"    运行测试出错: 命令在 {e.timeout} 秒后超时")
             if e.stdout:
-                print("    STDOUT:", e.stdout)
+                print("    标准输出 STDOUT:", e.stdout)
             if e.stderr:
-                print("    STDERR:", e.stderr)
+                print("    标准错误 STDERR:", e.stderr)
         except Exception as e:
-            print(f"    Error running test: {e}")
+            print(f"    运行测试出错: {e}")
 
 def main():
     for name, config in PROJECTS.items():
