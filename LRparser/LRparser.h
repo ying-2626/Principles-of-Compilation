@@ -208,6 +208,68 @@ void flattenAST(ASTNode *root, int depth, vector<TokenInfo> &seq)
     }
 }
 
+/* 验证候选符号是否有效（通过模拟解析）
+ * 模拟 parser 在当前栈状态下接收 candidate 后的一系列动作（Shift/Reduce）。
+ * 如果最终能成功 Shift 该 candidate（或 Accept），则返回 true；
+ * 如果遇到 Error 或超过最大步数仍未 Shift，则返回 false。
+ */
+bool isCandidateValid(int startState, char candidate, const stack<int> &originalStack)
+{
+    stack<int> tempStack = originalStack;
+    int currentState = startState;
+    char lookahead = candidate;
+    int steps = 0;
+    const int MAX_STEPS = 20; // 防止无限循环
+
+    while (steps < MAX_STEPS)
+    {
+        int charIndex = (unsigned char)lookahead;
+        Action act = ACTION[currentState][charIndex];
+
+        if (act.type == 0) // Shift
+        {
+            return true;
+        }
+        else if (act.type == 1) // Reduce
+        {
+            int prodIndex = act.val;
+            string lhs = PRODUCTIONS[prodIndex].left;
+            string rhs = PRODUCTIONS[prodIndex].right;
+            int rhsLen = (rhs == "") ? 0 : rhs.length();
+
+            // 模拟弹栈
+            for (int k = 0; k < rhsLen; k++)
+            {
+                if (!tempStack.empty())
+                    tempStack.pop();
+            }
+            if (tempStack.empty())
+                return false; // 异常情况
+
+            // 模拟 GOTO
+            int topState = tempStack.top();
+            int nextState = GOTO[topState][(unsigned char)lhs[0]];
+
+            if (nextState == -1)
+                return false; // GOTO 错误
+
+            tempStack.push(nextState);
+            currentState = nextState;
+            // lookahead 保持不变，继续在下一轮检查新状态下的动作
+        }
+        else if (act.type == 2) // Accept
+        {
+            return true;
+        }
+        else // Error (-1 或其他无效值)
+        {
+            return false;
+        }
+        steps++;
+    }
+    return false; // 超过最大步数仍未 Shift/Accept，视为无效
+}
+
 /* 主分析函数：基于 LR 分析表进行移进-规约并同时构造语法树 */
 void Analysis(istream &in = cin)
 {
@@ -255,19 +317,19 @@ void Analysis(istream &in = cin)
         // 错误处理与恢复
         if (act.type != 0 && act.type != 1 && act.type != 2)
         {
-            // 尝试虚拟插入恢复
-            // 调整优先级：优先尝试闭括号，再尝试分号，以避免在 while(...) 中误报缺少分号
-            char candidates[] = {')', ']', '}', ';'};
+            char candidates[] = {';', ')', ']', '}'}; // 恢复优先级
             bool recovered = false;
             for (char c : candidates)
             {
-                Action recAct = ACTION[currentState][(unsigned char)c];
-                if (recAct.type == 0 || recAct.type == 1 || recAct.type == 2)
+                // 使用深度验证替代简单的动作检查
+                if (isCandidateValid(currentState, c, stateStack))
                 {
+                    Action recAct = ACTION[currentState][(unsigned char)c];
+
                     int reportLine = (data.lineNum > lastAcceptedTokenLine) ? lastAcceptedTokenLine : data.lineNum;
                     cout << "语法错误，第" << reportLine << "行，缺少符号: '" << c << "'" << endl;
                     act = recAct;
-                    virtualToken = c; // 设置虚拟符号，后续循环将持续使用直到移进
+                    virtualToken = c; // 设置虚拟符号
                     lookahead = c;
                     recovered = true;
                     break;
@@ -391,8 +453,6 @@ void Analysis(istream &in = cin)
             cout << item.first << endl;
         }
 
-        // 如需与原 LL 版本完全一致的格式，可复用原有输出函数；
-        // 当前版本只保证生成 DOT 文件用于可视化。
         Visualizer::generateDOT("lr_tree.dot", data.derivationSeq);
 
         // Clean up
