@@ -7,11 +7,11 @@
 - **符号表管理**: 维护变量的类型 (int/real) 和值 (`symbol_table_snapshot.csv`)。
 
 ## 2. 输入输出
-- **输入**: 源代码。
+- **输入**: 源代码，实验中典型输入文件位于 `dataset/semantic` 目录，例如 `test1.txt`、`test2.txt`、`error_test2.txt` 等。
 - **输出**:
-    - `SemanticAnalysis/output/ir_code.txt`: 生成的中间代码序列。
-    - `SemanticAnalysis/output/symbol_table_snapshot.csv`: 程序结束时的符号表快照。
-    - 控制台输出: 语义错误提示（如除零）。
+    - `SemanticAnalysis/output/<输入文件名前缀>_ir_code.txt`: 生成的中间代码序列（例如 `test1_ir_code.txt`）。
+    - `SemanticAnalysis/output/<输入文件名前缀>_symbol_table_snapshot.csv`: 程序结束时的符号表快照（例如 `test1_symbol_table_snapshot.csv`）。
+    - 控制台输出: 语义错误提示（如除零），通过 `run_tests.py` 运行时会被重定向到对应输入文件旁的 `*.out` 文件（例如 `dataset/semantic/error_test2.txt.out`）。
 
 ## 3. 数据结构
 - **符号表**: `SymbolTable` 类，内部使用 `unordered_map<string, Symbol>`。
@@ -66,11 +66,14 @@
    ```cpp
    // 导出 CSV 快照
    fprintf(fp, "Name,Type,Value\n");
-70→   for (auto &pair : table) {
-71→       fprintf(fp, "%s,%s,%.2f\n", pair.first.c_str(), 
-72→               (pair.second.type==TYPE_INT?"int":"real"), pair.second.value);
-73→   }
-74→   ```
+   for (auto &pair : table) {
+       fprintf(fp, "%s,%s,%.2f\n", pair.first.c_str(), 
+               (pair.second.type==TYPE_INT?"int":"real"), pair.second.value);
+   }
+   ```
+
+4. **基于 Hash 的符号表与顺序扫描实现的对比**
+   符号表底层使用 `unordered_map<string, Symbol>` 存储标识符信息，相较于简单的顺序数组/链表符号表，每次查找/插入的期望时间复杂度由 $O(n)$ 降为接近 $O(1)$，在包含较多变量和多次查表的算术/分支组合场景中显著降低了语义分析阶段的总开销。同时，通过为四元式序列采用顺序存储的 `vector<Quadruple>` 结构，既方便按照生成顺序线性输出，又便于后续进行简单的遍历式优化（如死代码删除或常量折叠），相比在链表结构上操作具有更好的缓存友好性和遍历性能，使得“解释执行 + IR 记录”在工程上更加轻量高效。
 
 ## 7. 测试与验证
 
