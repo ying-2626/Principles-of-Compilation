@@ -15,14 +15,14 @@ PROJECTS = {
         "src": "LLparser/LLparserMain.cpp",
         "include": "LLparser",
         "exe": "LLparser/output/LLparser.exe",
-        "test_dir": "dataset/parser",
+        "test_dir": "dataset/parser/ll",
         "dot_file": "ll_tree.dot"
     },
     "lr": {
         "src": "LRparser/LRparserMain.cpp",
         "include": "LRparser",
         "exe": "LRparser/output/LRparser.exe",
-        "test_dir": "dataset/parser",
+        "test_dir": "dataset/parser/lr",
         "dot_file": "lr_tree.dot"
     },
     "semantic": {

@@ -263,37 +263,10 @@ void solve_opt(int line, bool execute)
     // 3. Operator or End
     read_safe(s);
     if (strlen(s) == 0 || s[0] == '\n')
-    { // Check for empty/newline handled by read_safe return
-        // Assignment only: a = 10
-        // But wait, read_safe returns -1 on newline.
-        // If s is empty string, it means we hit a delimiter that wasn't allowed?
-        // Actually, read_safe returns len.
-        // Let's rely on checking if s is operator.
+    {
     }
 
     bool is_op = (s[0] == '+' || s[0] == '-' || s[0] == '*' || s[0] == '/');
-
-    if (!is_op)
-    {
-        // It was the end of statement or something else.
-        // If it's not an op, we assume it's next token (or end).
-        // Original logic checked delimiters.
-        // Here, if s is not op, we should probably unget it?
-        // But read_safe already consumed it.
-        // Actually, simplified grammar: Assignment is either "v = x" or "v = x op y".
-        // If s is NOT an op, it must be that the statement ended.
-        // But wait, read_safe skips delimiters like ';'.
-        // So if we read "then" or "else", that's not op.
-        // So if s is not op, we have consumed the first token of NEXT statement (or then/else).
-        // We need to unget the whole token string? Not supported.
-        // Hack: Global 'pushed_back_token'.
-        // BUT, for test1.txt: "a = a + 1", s will be "+".
-        // "c = c / 2", s will be "/".
-        // "int a = 1", s will be "int" (next decl) or empty?
-
-        // Let's refine:
-        // If s is empty, it means read_safe hit \n or $.
-    }
 
     if (!is_op)
     {
@@ -322,22 +295,6 @@ void solve_opt(int line, bool execute)
             }
             irGen.emit("=", arg1, "", result);
         }
-
-        // Since we read 's' and it wasn't an op, we might have over-read if it wasn't empty.
-        // But in test1.txt, statements end with ; which is skipped.
-        // So "a = 1 ; int ..." -> read "a", "=", "1". Next read gets "int".
-        // So s would be "int".
-        // We need to push back "int" so main loop can handle it?
-        // Or solve_opt is called when we KNOW it's a statement.
-        // The issue is distinguishing "v=x" from "v=x+y".
-        // If we read "int", it's not op.
-        // We need a mechanism to push back token.
-        // Let's add that to BufferedReader/Global.
-        // But simpler: "s" is the lookahead.
-        // If we are in solve_opt, we assume we are parsing assignment.
-        // If s is not op, we assume end of assignment.
-        // We need to handle 's' being the start of next thing.
-        // Let's use a global 'pending_token' string.
     }
     else
     {
@@ -410,7 +367,7 @@ void solve_opt_wrapper(int line, bool execute)
     t = read_token_wrapper(s); // Op?
     if (t <= 0)
     { // EOF or Newline
-        // End of stmt
+      // End of stmt
     }
     else
     {
@@ -612,12 +569,7 @@ void AnalysisOptimized(istream &in)
     // Output
     if (flag_err)
     {
-        // To verify test1.txt output: "a: 2\nb: 4\nc: 1.5" (if logic correct)
-        // Original output was "a: 10\nb: 3.14".
-        // Let's print sorted map.
-        // Wait, the original code printed 'a', 'b', 'c' ... in order of 'a'-'z'.
-        // My snapshot prints in key order (sorted map).
-        // Let's print to stdout for test verification.
+
         map<string, Symbol> sorted(symTable.table.begin(), symTable.table.end());
         for (auto &pair : sorted)
         {
@@ -632,13 +584,8 @@ void AnalysisOptimized(istream &in)
         }
     }
 
-    // Dump Snapshot & IR
-    // Use relative path assuming running from project root or SemanticAnalysis dir
-    // But to be safe and match user request, let's try to put them in SemanticAnalysis folder relative to CWD?
-    // The CWD is usually project root. So "SemanticAnalysis/filename".
-    // Check if directory exists? It should.
-    symTable.dumpSnapshot("SemanticAnalysis/symbol_table_snapshot.csv");
-    irGen.dumpIR("SemanticAnalysis/ir_code.txt");
+    symTable.dumpSnapshot("SemanticAnalysis/output/symbol_table_snapshot.csv");
+    irGen.dumpIR("SemanticAnalysis/output/ir_code.txt");
 
     delete reader;
 }
