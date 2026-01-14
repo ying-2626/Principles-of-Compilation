@@ -291,8 +291,6 @@ void Analysis(istream &in = cin)
     int len = prog.length();
     bool accepted = false; // 标记是否成功接受输入
 
-    cout << "program => " << endl; // 与 LL 版本保持一致的输出格式起始行
-
     char virtualToken = 0;         // 虚拟插入的符号（0 表示无）
     int lastAcceptedTokenLine = 1; // 上一个成功移进的 Token 所在的行号
 
@@ -437,6 +435,7 @@ void Analysis(istream &in = cin)
 
     if (accepted && !nodeStack.empty())
     {
+        cout << "program => " << endl;
         ASTNode *root = nodeStack.top();
 
         // 将语法树展平为 <符号名, 深度> 序列，交给可视化模块

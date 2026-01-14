@@ -1,7 +1,7 @@
-program => 
 语法错误，第2行，缺少符号: ';'
 语法错误，第3行，缺少符号: ';'
 语法错误，第4行，缺少符号: ';'
+program => 
 	compoundstmt
 		{
 		stmts
