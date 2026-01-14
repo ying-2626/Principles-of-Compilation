@@ -15,7 +15,7 @@
 
 using namespace std;
 
-// --- 1. Infrastructure: Buffered Reader ---
+// --- 1. 基础设施：缓冲读取器 ---
 class BufferedReader
 {
 private:
@@ -50,7 +50,7 @@ public:
     bool isEOF() const { return eof; }
 };
 
-// --- 2. Type System & Symbol Table ---
+// --- 2. 类型系统与符号表 ---
 enum VarType
 {
     TYPE_INT,
@@ -98,14 +98,14 @@ public:
         {
             return table[name];
         }
-        return Symbol(); // Unknown
+        return Symbol(); // 未知
     }
 
     void dumpSnapshot(const string &filename)
     {
         ofstream out(filename);
         out << "Name,Type,Value" << endl;
-        // Sort for consistent output
+        // 排序以保持输出一致性
         map<string, Symbol> sorted(table.begin(), table.end());
         for (auto &pair : sorted)
         {
@@ -124,7 +124,7 @@ public:
     }
 };
 
-// --- 3. IR Generation ---
+// --- 3. 中间代码生成 ---
 struct Quadruple
 {
     string op;
@@ -154,7 +154,7 @@ public:
     }
 };
 
-// Global Context
+// 全局上下文
 BufferedReader *reader;
 SymbolTable symTable;
 IRGenerator irGen;
@@ -176,12 +176,12 @@ void unget_char(char c)
     next_char = c;
 }
 
-// Optimized read function that skips invalid chars (like original)
+// 优化的读取函数，跳过无效字符（与原始版本一致）
 int read_safe(char *s)
 {
     char c = get_char();
-    // Skip ANY character that is not in the allowed set, except newline and $
-    // Allowed: a-z, 0-9, ., >, <, =, !, +, -, *, /
+    // 跳过任何非允许集中的字符，换行符和 $ 除外
+    // 允许: a-z, 0-9, ., >, <, =, !, +, -, *, /
     while (true)
     {
         if (c == 0)
@@ -212,7 +212,7 @@ int read_safe(char *s)
         s[len++] = c;
         c = get_char();
     }
-    unget_char(c); // Put back delimiter
+    unget_char(c); // 放回分隔符
 
     s[len] = '\0';
     return len;
@@ -234,33 +234,33 @@ double parseValue(char *s)
 
 int flag_err = 1;
 
-// Forward declaration
+// 前向声明
 void solve_opt(int line, bool execute);
 
-// Helper to check/skip statement
+// 检查/跳过语句的辅助函数
 void solvecheck_opt(int line)
 {
     solve_opt(line, false);
 }
 
-// execute=true means update symbol table, false means just parse
+// execute=true 表示更新符号表，false 表示仅解析
 void solve_opt(int line, bool execute)
 {
     char s[100];
     string arg1, arg2, op, result;
 
-    // 1. Result Variable
+    // 1. 结果变量
     int t = read_safe(s);
     result = s;
 
     read_safe(s); // =
 
-    // 2. Operand 1
+    // 2. 操作数 1
     read_safe(s);
     arg1 = s;
     double val1 = parseValue(s);
 
-    // 3. Operator or End
+    // 3. 运算符或结束
     read_safe(s);
     if (strlen(s) == 0 || s[0] == '\n')
     {
@@ -270,13 +270,13 @@ void solve_opt(int line, bool execute)
 
     if (!is_op)
     {
-        // Assignment: result = arg1
+        // 赋值: result = arg1
         if (execute)
         {
             Symbol sym = symTable.get(result);
             if (sym.type == TYPE_INT || sym.type == TYPE_UNKNOWN)
             {
-                // Inference
+                // 推导
                 bool is_int = true;
                 for (char c : arg1)
                     if (c == '.')
@@ -354,7 +354,7 @@ void solve_opt_wrapper(int line, bool execute)
     char s[100];
     string arg1, arg2, op, result;
 
-    // Result
+    // 结果
     int t = read_token_wrapper(s);
     result = s;
 
@@ -367,14 +367,14 @@ void solve_opt_wrapper(int line, bool execute)
     t = read_token_wrapper(s); // Op?
     if (t <= 0)
     { // EOF or Newline
-      // End of stmt
+      // 语句结束
     }
     else
     {
         bool is_op = (s[0] == '+' || s[0] == '-' || s[0] == '*' || s[0] == '/');
         if (!is_op)
         {
-            pending_token = s; // Not op, save for next
+            pending_token = s; // 不是操作符，留给下一次
         }
         else
         {
@@ -411,11 +411,11 @@ void solve_opt_wrapper(int line, bool execute)
 
                 irGen.emit(op, arg1, arg2, result);
             }
-            return; // Done
+            return; // 完成
         }
     }
 
-    // Assignment only case
+    // 仅赋值情况
     if (execute)
     {
         Symbol sym = symTable.get(result);
@@ -470,24 +470,24 @@ void solveif_opt(int line)
     if (cond)
     {
         solve_opt_wrapper(line, true);
-        // Check for else
+        // 检查 else
         read_token_wrapper(s);
         if (strcmp(s, "else") == 0)
         {
-            solve_opt_wrapper(line, false); // Skip else block
+            solve_opt_wrapper(line, false); // 跳过 else 块
         }
         else
         {
-            pending_token = s; // Not else, push back
+            pending_token = s; // 不是 else，推回
         }
     }
     else
     {
-        solve_opt_wrapper(line, false); // Skip then block
+        solve_opt_wrapper(line, false); // 跳过 then 块
         read_token_wrapper(s);
         if (strcmp(s, "else") == 0)
         {
-            solve_opt_wrapper(line, true); // Execute else block
+            solve_opt_wrapper(line, true); // 执行 else 块
         }
         else
         {
@@ -501,7 +501,7 @@ void AnalysisOptimized(istream &in)
     reader = new BufferedReader(in);
     char s[100];
 
-    // Phase 1: Declarations
+    // 阶段 1: 声明
     while (true)
     {
         int t = read_token_wrapper(s);
@@ -530,12 +530,12 @@ void AnalysisOptimized(istream &in)
         }
         else
         {
-            pending_token = s; // Start of statements
+            pending_token = s; // 语句开始
             break;
         }
     }
 
-    // Phase 2: Statements
+    // 阶段 2: 语句
     int line = 2;
     int loop_limit = 0;
     while (true)
@@ -544,12 +544,12 @@ void AnalysisOptimized(istream &in)
             break;
 
         int t = -1;
-        // Skip newlines/empty
+        // 跳过换行/空
         while (true)
         {
             t = read_token_wrapper(s);
             if (t != -1)
-                break; // -1 is newline
+                break; // -1 是换行
         }
         if (t == 0)
             break; // EOF
@@ -566,7 +566,7 @@ void AnalysisOptimized(istream &in)
         line++;
     }
 
-    // Output
+    // 输出
     if (flag_err)
     {
 

@@ -143,7 +143,7 @@ void init_dfa()
 {
     dfa.init();
 
-    // State 0: Start
+    // 状态 0: 起始状态
     int s_start = 0;
 
     // 1. 空白字符

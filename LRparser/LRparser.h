@@ -454,7 +454,7 @@ void Analysis(istream &in = cin)
 
         Visualizer::generateDOT("lr_tree.dot", data.derivationSeq);
 
-        // Clean up
+        // 清理内存
         delete root;
     }
 }

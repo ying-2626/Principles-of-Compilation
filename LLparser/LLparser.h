@@ -550,7 +550,7 @@ void Analysis(istream &in = cin)
 
     // 第二遍：构建并输出语法分析树
     llDerivationSeq.clear();
-    llDerivationSeq.push_back({"program", 0}); // Root
+    llDerivationSeq.push_back({"program", 0}); // 根节点
 
     cout << "program" << endl; // 输出起始符号
     cur = cal("A");            // 重置为起始符号
@@ -560,7 +560,7 @@ void Analysis(istream &in = cin)
         solve(prog, cur, 0, 1);
     }
 
-    // Generate DOT file
+    // 生成 DOT 文件
     Visualizer::generateDOT("ll_tree.dot", llDerivationSeq);
 
     /********* End *********/

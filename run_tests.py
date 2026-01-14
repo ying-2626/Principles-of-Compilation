@@ -65,7 +65,7 @@ def convert_dot_to_png(dot_path, png_path):
         subprocess.run(["dot", "-Tpng", dot_path, "-o", png_path], check=True)
         return True
     except Exception as e:
-        print(f"    Error converting DOT to PNG: {e}")
+        print(f"    将 DOT 转换为 PNG 时出错: {e}")
         return False
 
 def run_tests(name, config):
@@ -103,7 +103,7 @@ def run_tests(name, config):
             with open(output_file, "w", encoding='utf-8') as f:
                 f.write(result.stdout)
                 if result.stderr:
-                    f.write("\nSTDERR:\n")
+                    f.write("\n标准错误 STDERR:\n")
                     f.write(result.stderr)
             print(f"    输出结果已保存到 {output_file}")
             
