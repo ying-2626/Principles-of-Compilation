@@ -39,26 +39,42 @@
 - 当遇到无法匹配的符号时，跳过输入直到遇到 **同步符号** (如 `;`, `}`, `)` )。
 - 引入了 `lastTokenLine` 机制，解决跨行错误（如缺少分号）导致的报错行号滞后问题，确保报错位置准确指向语句结束行。
 
-**代码证据**:
-```cpp
-// 恐慌模式恢复
-while (i < len && s[i] != ';' && s[i] != '}' && s[i] != ')')
-{
-    if (s[i] == '\n') line++;
-    i++;
-}
-```
-
 ## 6. 亮点概述
-- **准确的行号追踪**: 通过 `lastTokenLine` 记录上一个成功匹配的 Token 行号，解决了传统分析器在遇到空行时报错行号偏大的问题。
-- **可视化支持**: 集成 `Visualizer` 类，自动生成 Graphviz DOT 文件，直观展示语法树结构。
+1. **Trie 树与 Hash 的双向映射架构**
+   在符号管理中，利用 Trie 树（字典树）进行关键字和运算符的快速前缀匹配，同时结合 Hash Map 进行种别码映射。这种架构在 $O(L)$ 时间复杂度内完成 Token 识别，并支持单字符别名（如 `if` -> `y`）以优化内部查表效率。
+   **代码证据**:
+   ```cpp
+   // Trie 插入与查找
+   void insert(string s) {
+       int p = 0;
+       for (int i = 0; i < s.length(); i++) {
+           int c = s[i];
+           if (!son[p][c]) son[p][c] = ++idx;
+           p = son[p][c];
+       }
+       cnt[p] = 1; // 标记单词结束
+   }
+   ```
 
-**代码证据**:
-```cpp
-// 行号修正逻辑
-if (line > lastTokenLine) {
-    reportLine = lastTokenLine;
-} else {
-    reportLine = line;
-}
-```
+2. **预测分析表驱动与恐慌模式恢复**
+   不同于简单的递归下降，本实现基于预计算的 LL(1) 预测分析表，消除了回溯开销。同时结合恐慌模式，当遇到语法错误时，通过跳过输入直到同步记号（Synchronizing Tokens）来实现鲁棒的错误恢复。
+   **代码证据**:
+   ```cpp
+   // 恐慌模式：跳过非法符号直到遇到同步集
+   while (i < len && s[i] != ';' && s[i] != '}' && s[i] != ')') {
+       if (s[i] == '\n') line++;
+       i++;
+   }
+   // 报告错误（使用修正后的行号）
+   cout << "语法错误，第" << reportLine << "行，缺少符号: '" << c << "'" << endl;
+   ```
+
+3. **AST 可视化集成**
+   开发了独立的 `Visualizer` 模块，将解析过程中生成的推导序列转换为 Graphviz DOT 格式。这使得抽象的语法树能够以图形化方式直观展示，便于调试和理解语法结构。
+   **代码证据**:
+   ```cpp
+   // 导出 DOT 文件
+   Visualizer::generateDOT("ll_tree.dot", llDerivationSeq);
+   // 节点连接逻辑
+   outfile << "    node" << parentIndex << " -> node" << i << ";" << endl;
+   ```

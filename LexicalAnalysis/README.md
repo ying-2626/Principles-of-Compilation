@@ -18,7 +18,7 @@
 **示例输入**:
 ```c
 int main() {
-    float a = 1.5;
+    float a = 1.5e-2;
     return 0;
 }
 ```
@@ -33,7 +33,7 @@ int main() {
 6: <float,13>
 7: <a,81>
 8: <=,72>
-9: <1.5,80>
+9: <1.5e-2,80>
 10: <;,53>
 ...
 ```
@@ -58,14 +58,29 @@ int main() {
 - 如果 DFA 在当前位置无法匹配任何有效的 Token（即 `last_accept_state` 为 -1），则跳过当前字符并继续尝试匹配，防止分析器卡死。
 
 ## 6. 亮点概述
-- **完整的 DFA 构建**: 支持复杂的词法特性，如科学计数法 (`1.2e-3`) 和转义字符。
-- **基于 Trie 思想的运算符匹配**: 在 DFA 中为所有运算符构建了类似 Trie 的路径，能够自动处理最长匹配（如区分 `<` 和 `<<`）。
+1. **基于状态迁移的复杂 Token 识别**
+   在处理数值常量时，完整的实现了整数、浮点数以及科学计数法的 DFA 状态链。例如，从整数状态遇到 `.` 进入小数部分，遇到 `e` 或 `E` 进入指数部分，并处理指数后的正负号。
+   **代码证据**:
+   ```cpp
+   // 科学计数法状态构建
+   int s_sci = dfa.add_state();
+   dfa.add_transition(s_num, 'e', s_sci); // 整数 -> 科学计数
+   dfa.add_transition(s_float, 'E', s_sci); // 浮点 -> 科学计数
+   int s_sci_sign = dfa.add_state();
+   dfa.add_transition(s_sci, '+', s_sci_sign); // 指数符号处理
+   ```
 
-**代码证据**:
-```cpp
-// 科学计数法状态构建
-int s_sci = dfa.add_state();
-dfa.add_transition(s_num, 'e', s_sci);
-dfa.add_transition(s_float, 'E', s_sci);
-// ...
-```
+2. **最长匹配策略 (Maximal Munch)**
+   算法始终尝试匹配最长的合法 Token，有效区分了前缀重叠的运算符（如 `<` 与 `<<`，`=` 与 `==`）。
+   **代码证据**:
+   ```cpp
+   while (pos < len) {
+       // ... 尝试转移 ...
+       if (accept[curr] != -1) {
+           last_accept_state = curr;
+           last_accept_pos = pos; // 贪婪记录最远的接收位置
+       }
+   }
+   // 回退到最后一次成功接收的位置
+   pos = last_accept_pos; 
+   ```

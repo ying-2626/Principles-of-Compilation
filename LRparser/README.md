@@ -35,17 +35,39 @@
 2. **恐慌模式**: 如果虚拟插入失败，则跳过当前非法 Token。
 3. **行号修正**: 同样引入 `lastAcceptedTokenLine`，确保报错行号准确对应上一个有效 Token。
 
-**代码证据**:
-```cpp
-// 虚拟插入优先级调整
-char candidates[] = {')', ']', '}', ';'}; // 优先尝试闭括号
-for (char c : candidates) {
-    Action recAct = ACTION[currentState][(unsigned char)c];
-    if (recAct.type != error) { ... }
-}
-```
-
 ## 6. 亮点概述
-- **自动错误修复尝试**: 通过虚拟插入机制，能够从常见的语法错误（如漏写分号或括号）中自动恢复，并继续分析后续代码，而不是直接退出。
-- **稳健的错误定位**: 结合 `lastAcceptedTokenLine` 和优先级调整，极大地减少了误报（如将缺 `)` 误报为缺 `;`）和行号偏移。
+1. **深度前瞻错误验证机制 (Deep Lookahead Validation)**
+   为了解决传统 LR 错误恢复中“试图插入符号但后续仍失败”的问题，设计了 `isCandidateValid` 函数。该函数不仅检查当前状态是否允许插入符号，还会**模拟**解析过程（执行一系列 Reduce 动作），直到确认能够成功 Shift 该符号。这种机制彻底消除了将缺少 `)` 误报为缺少 `;` 的情况。
+   **代码证据**:
+   ```cpp
+   // 模拟解析过程验证候选符号
+   bool isCandidateValid(int startState, char candidate, const stack<int>& originalStack) {
+       // ... 复制栈状态 ...
+       while (steps < MAX_STEPS) {
+           if (act.type == Shift) return true; // 成功 Shift，验证通过
+           else if (act.type == Reduce) { ... } // 模拟规约
+           else return false; // 遇到错误，验证失败
+       }
+   }
+   ```
 
+2. **自动化表生成与代码导出 (Table Generation & Export)**
+   编写了 `maker.cpp` 工具，实现了从文法定义到 SLR 分析表的完整自动化构建流程（计算 First/Follow 集、构建项目集闭包、生成 DFA）。更进一步，该工具直接生成 C++ 头文件 `LRTable.h`，将计算好的 Action/Goto 表硬编码为数组，极大地提高了运行时效率。
+   **代码证据**:
+   ```cpp
+   // 自动生成 C++ 代码
+   cout << "Action ACTION[STATE_COUNT][TERM_COUNT];" << endl;
+   cout << "void initLRTable() {" << endl;
+   // ... 遍历表生成赋值语句 ...
+   cout << "    ACTION[" << i << "][" << j << "] = {" << act.type << ", " << act.val << "};" << endl;
+   ```
+
+3. **语法树构建与可视化**
+   在自底向上的规约过程中同步构建 AST 节点，并维护了节点栈。分析完成后，利用 `flattenAST` 将树结构序列化，并对接 `Visualizer` 模块生成可视化图表，清晰展示了自底向上的建树逻辑。
+   **代码证据**:
+   ```cpp
+   // 规约时构建树节点
+   ASTNode *newNode = new ASTNode(lhsName);
+   newNode->children = children; // 将弹出的子节点挂载
+   nodeStack.push(newNode);
+   ```

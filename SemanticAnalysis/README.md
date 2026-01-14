@@ -39,14 +39,36 @@
 - **类型检查**: 虽为弱类型推导，但内部区分 INT 和 REAL，并在运算时进行适当处理。
 
 ## 6. 亮点概述
-- **即时解释执行**: 分析器不仅生成中间代码，还实时计算变量值（解释器模式），因此能在分析结束时输出准确的符号表快照（包含最终运行结果）。
-- **类型推导与混合运算**: 支持整型和浮点型的混合运算及自动类型转换。
+1. **解释器模式与中间代码生成并行 (Interpretation & Compilation)**
+   分析器不仅仅是生成中间代码（编译），同时还充当了一个即时解释器。在解析赋值和算术运算时，它会实时计算变量的实际值并更新符号表。这使得程序在分析结束时能够直接输出最终的变量状态快照，极大地便利了调试和验证。
+   **代码证据**:
+   ```cpp
+   // 生成代码的同时计算值
+   ir.gen(OP_MUL, arg1, arg2, resVar); // 生成 MUL t1, a, b
+   double res = val1 * val2; // 实时计算结果
+   ```
 
-**代码证据**:
-```cpp
-// 解释执行与类型处理
-if (sym.type == TYPE_INT)
-    symTable.setInt(result, (int)res);
-else
-    symTable.setReal(result, res);
-```
+2. **类型自动提升与混合运算 (Type Promotion)**
+   实现了完善的类型系统，支持 `int` 和 `real` (float) 类型的混合运算。在运算过程中，如果操作数包含实数，系统会自动将整型操作数提升为实数进行计算，并生成相应的类型转换逻辑，确保了语义的正确性。
+   **代码证据**:
+   ```cpp
+   // 混合类型处理
+   if (sym1.type == TYPE_REAL || sym2.type == TYPE_REAL) {
+       // ... 执行实数运算 ...
+       targetType = TYPE_REAL; 
+   } else {
+       // ... 执行整数运算 ...
+   }
+   ```
+
+3. **符号表快照导出 (Snapshot Export)**
+   设计了符号表的序列化功能，能够将当前所有变量的状态（名称、类型、当前值）以 CSV 格式导出。这不仅用于最终结果展示，也可以用于程序运行过程中的状态监控。
+   **代码证据**:
+   ```cpp
+   // 导出 CSV 快照
+   fprintf(fp, "Name,Type,Value\n");
+   for (auto &pair : table) {
+       fprintf(fp, "%s,%s,%.2f\n", pair.first.c_str(), 
+               (pair.second.type==TYPE_INT?"int":"real"), pair.second.value);
+   }
+   ```
