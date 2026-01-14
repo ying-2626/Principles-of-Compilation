@@ -7,9 +7,9 @@
 ## 2. 输入输出
 - **输入**: 源代码。
 - **输出**:
-    - 移进-规约过程的日志。
+    - 语法错误提示（如有）。
+    - 控制台输出语法树结构的文本表示（缩进形式）。
     - 语法树的可视化 `.dot` 文件。
-    - 精确的错误报告。
 
 ## 3. 数据结构
 - **ACTION 表**: `struct Action { int type; int val; }`，二维数组，存储移进、规约、接受动作。
@@ -30,29 +30,16 @@
 ## 5. 错误处理
 实现了 **虚拟插入 (Virtual Insertion)** 与 **恐慌模式** 结合的策略：
 1. **虚拟插入**: 当查表失败（报错）时，尝试在输入流前“假想”插入常见的缺失符号（如 `;`, `)`, `]`, `}`）。
-    - 优先尝试插入闭括号 `)`，以解决 `while(...)` 结构中常见的误报问题。
     - 如果插入后能查到有效动作，则执行该动作并报错，但不消耗实际输入。
 2. **恐慌模式**: 如果虚拟插入失败，则跳过当前非法 Token。
 3. **行号修正**: 同样引入 `lastAcceptedTokenLine`，确保报错行号准确对应上一个有效 Token。
 
 ## 6. 亮点概述
-1. **深度前瞻错误验证机制 (Deep Lookahead Validation)**
-   为了解决传统 LR 错误恢复中“试图插入符号但后续仍失败”的问题，设计了 `isCandidateValid` 函数。该函数不仅检查当前状态是否允许插入符号，还会**模拟**解析过程（执行一系列 Reduce 动作），直到确认能够成功 Shift 该符号。这种机制彻底消除了将缺少 `)` 误报为缺少 `;` 的情况。
-   **代码证据**:
-   ```cpp
-   // 模拟解析过程验证候选符号
-   bool isCandidateValid(int startState, char candidate, const stack<int>& originalStack) {
-       // ... 复制栈状态 ...
-       while (steps < MAX_STEPS) {
-           if (act.type == Shift) return true; // 成功 Shift，验证通过
-           else if (act.type == Reduce) { ... } // 模拟规约
-           else return false; // 遇到错误，验证失败
-       }
-   }
-   ```
+1. **分析表生成与解析分离的生产者–消费者架构**
+   LR 分析流程被拆分为两个低耦合模块：生成端 `maker.cpp` 从文法出发计算 FIRST/FOLLOW 集、构造项目集族与 DFA，并生成 `LRTable.h`；消费端 LR 解析器仅依赖 `LRTable.h` 中硬编码的 ACTION/GOTO 表完成移进–规约分析，实现了典型的生产者–消费者模式，文法变化时只需重新生成表而无需修改解析核心。
 
 2. **自动化表生成与代码导出 (Table Generation & Export)**
-   编写了 `maker.cpp` 工具，实现了从文法定义到 SLR 分析表的完整自动化构建流程（计算 First/Follow 集、构建项目集闭包、生成 DFA）。更进一步，该工具直接生成 C++ 头文件 `LRTable.h`，将计算好的 Action/Goto 表硬编码为数组，极大地提高了运行时效率。
+   编写了 `maker.cpp` 工具，实现了从文法定义到 SLR 分析表的完整自动化构建流程（计算 First/Follow 集、构建项目集闭包、生成 DFA）。更进一步，该工具直接生成 C++ 头文件 `LRTable.h`，将计算好的 ACTION/GOTO 表硬编码为数组，极大地提高了运行时效率。
    **代码证据**:
    ```cpp
    // 自动生成 C++ 代码
@@ -71,3 +58,24 @@
    newNode->children = children; // 将弹出的子节点挂载
    nodeStack.push(newNode);
    ```
+4.  **深度前瞻错误验证机制 (Deep Lookahead Validation)**
+   设计了 `isCandidateValid` 函数，不仅检查当前状态是否允许插入符号，还会**模拟**解析过程（执行一系列 Reduce 动作），直到确认能够成功 Shift 该符号。
+   **代码证据**:
+   ```cpp
+   // 模拟解析过程验证候选符号
+   bool isCandidateValid(int startState, char candidate, const stack<int>& originalStack) {
+       // ... 复制栈状态 ...
+       while (steps < MAX_STEPS) {
+           if (act.type == Shift) return true; // 成功 Shift，验证通过
+           else if (act.type == Reduce) { ... } // 模拟规约
+           else return false; // 遇到错误，验证失败
+       }
+   }
+   ```
+
+5. **行号追踪与多错误场景验证**
+   在移进过程中维护 `lastAcceptedTokenLine`，记录上一次成功移进的 Token 行号，在报告缺少 `;`、`)` 等错误时以此作为基准行号，从而避免错误行号落在下一条语句或空行上。通过同时缺少多种符号的错误用例（`lr_error_test1.txt`、`lr_error_test2.txt` 等），验证了错误恢复策略在复杂场景下仍能给出稳定且不重复的错误提示。
+
+## 7. 测试与验证
+
+- 为 LR 分析器构造了包含完全正确输入和多类错误输入的测试集，包括基础用例 `lr_test1.txt`、`lr_test2.txt`，以及缺少 `;`、缺少 `)` 等典型语法错误的组合用例 `lr_error_test1.txt`、`lr_error_test2.txt`。这些用例同时被用于验证深度前瞻错误恢复与行号追踪机制的效果。

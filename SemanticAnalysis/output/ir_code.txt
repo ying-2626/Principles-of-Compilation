@@ -1,7 +1,9 @@
-0: DECL_INT 1, , a
-1: DECL_INT 2, , b
-2: DECL_REAL 3.0, , c
-3: + a, 1, a
-4: * b, a, b
-5: IF_< a, b, GOTO_TRUE
-6: / c, 2, c
+0: DECL_INT 10, , x
+1: DECL_INT 5, , y
+2: DECL_REAL 2.5, , z
+3: - x, y, x
+4: + y, 3, y
+5: IF_> x, y, GOTO_TRUE
+6: / z, 2, z
+7: + x, y, x
+8: = 2, , *

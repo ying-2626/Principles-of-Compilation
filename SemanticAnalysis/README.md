@@ -20,13 +20,12 @@
     - `Quadruple`: `{op, arg1, arg2, result}`。
 
 ## 4. 实现算法
-采用 **递归下降分析** 配合 **语义动作**：
-- **声明处理**: 遇到 `int a = 1;`，在符号表中注册变量并生成 `DECL` 指令。
-- **赋值语句**: 解析表达式，进行类型推导（Type Inference）或转换，更新符号表，生成 `=` 指令。
-- **控制流**:
-    - `if-else`: 生成条件跳转指令 (`IF_GT`, `GOTO` 等)。
-    - 采用回填 (Backpatching) 思想的简化版或直接生成跳转标签。
-- **优化读取**: 实现了 `BufferedReader` 和 `read_safe`，高效处理输入流并过滤非法字符。
+采用两阶段的语法制导翻译流程：
+- **阶段 1：声明段**  
+  顺序读取形如 `int a = 1;`、`real c = 3.0;` 的声明语句，在符号表中注册变量并生成对应的 `DECL_INT`、`DECL_REAL` 四元式。
+- **阶段 2：语句段**  
+  从第二行开始按行处理复合语句块 `{ ... }` 内的赋值语句和 `if-else` 语句，使用 `solve_opt_wrapper`、`solveif_opt` 等过程函数逐行解析，一边计算表达式值并更新符号表，一边发射 `=`, `+`, `-`, `*`, `/` 等四元式，实现“解释执行 + 中间代码生成并行”。
+- **优化读取**: 通过 `BufferedReader` 和 `read_safe` 封装底层输入流，只保留字母、数字与运算符字符，跳过空白和无效符号，提高了语义分析阶段的输入稳定性和 I/O 效率。
 
 ## 5. 错误处理
 - **除零检查**: 在除法运算前检查除数是否接近 0。
@@ -67,8 +66,13 @@
    ```cpp
    // 导出 CSV 快照
    fprintf(fp, "Name,Type,Value\n");
-   for (auto &pair : table) {
-       fprintf(fp, "%s,%s,%.2f\n", pair.first.c_str(), 
-               (pair.second.type==TYPE_INT?"int":"real"), pair.second.value);
-   }
-   ```
+70→   for (auto &pair : table) {
+71→       fprintf(fp, "%s,%s,%.2f\n", pair.first.c_str(), 
+72→               (pair.second.type==TYPE_INT?"int":"real"), pair.second.value);
+73→   }
+74→   ```
+
+## 7. 测试与验证
+
+- 语义分析测试集中包含了 `test1.txt` 等正常用例，用于验证在多语句、多分支情况下符号表最终状态与生成的四元式是否与手算结果一致。
+- 通过新增 `test2.txt` 和 `error_test2.txt` 等用例覆盖更多算术组合和运行时错误场景，其中 `error_test2.txt` 专门构造了除零等非法运算，用于验证除零检测与错误信息中的行号是否与实际源码位置一致，并检查在出现错误后仍能正确生成符号表快照与中间代码文件。
